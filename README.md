@@ -11,10 +11,12 @@ An R and Python REPL with a live plot pane, inside Neovim. It works like RStudio
 - **The interpreter is detected automatically.**
   - R uses `radian` if installed, otherwise `R`.
   - Python uses the project's `.venv`/`venv` (IPython if present). Otherwise it falls back to a managed venv at `~/.local/share/replstudio/venv`, which is created after asking.
+- **Parquet files open as a table.** `:e data.parquet` shows the first 200 rows with column types, read-only, through the `duckdb` CLI.
 - **Snappy by design.**
   - Startup cost is zero (lazy on filetype).
   - Nothing polls: plots arrive through `fs_event`.
   - Picking the statement takes about 0.05 ms.
+  - A parquet file opens in about 40 ms, whatever its size.
   - The interpreter hooks cost about 2–6 µs per command in Python and about 0.08 ms in R.
 
 ## Requirements
@@ -30,6 +32,7 @@ An R and Python REPL with a live plot pane, inside Neovim. It works like RStudio
   - then R's default
 
   Set `REPLSTUDIO_R_DEVICE=ragg|quartz|cairo|default` to force one. If it fails to open, the hook detects again.
+- Parquet viewer (optional): the [`duckdb`](https://duckdb.org) CLI, e.g. `brew install duckdb`.
 
 ## Install (lazy.nvim)
 
@@ -38,6 +41,7 @@ An R and Python REPL with a live plot pane, inside Neovim. It works like RStudio
   "matthewgson/replstudio.nvim", -- or dir = "~/path/to/09_ReplStudio"
   ft = { "r", "python", "quarto" },
   cmd = "ReplStudio",
+  event = "BufReadCmd *.parquet", -- the parquet viewer
   opts = {},
 }
 ```
@@ -93,6 +97,24 @@ In the plot pane:
 
 Some terminals send Shift+Enter as a plain Enter. Inside tmux, check with `i<C-v><S-CR>`. If that's the case, use `<leader>ic`, or set `extended-keys-format csi-u` in tmux.
 
+## Parquet viewer
+
+Opening a `.parquet` file (`:e`, a file explorer, a picker) shows its first rows as an aligned table instead of binary. It is browse-only: the buffer cannot be edited or written.
+
+- **The header stays put.** Column names and their types (coloured by kind: numbers, text, dates, booleans, nested) stay pinned at the top while you scroll down, and follow when you scroll sideways. Row numbers sit in the left margin, so they stay visible too.
+- **Columns are capped** at `max_width` cells. Longer values end in `…`; `K` shows the full value. Tabs and newlines inside a value show as `→` and `↵`.
+- **The window bar** shows the file, `first 200 of 2,000,000 rows × 11 cols`, and the keys.
+
+| Key | Action |
+|---|---|
+| `w` / `b`, `<Tab>` / `<S-Tab>` | Next / previous column (scrolls so the whole column shows) |
+| `K` | Full value of the cell, with its column and type |
+| `q` | Close |
+
+Everything else is plain Neovim: `j`/`k`, `<C-d>`/`<C-u>`, `gg`/`G`, `zl`/`zh`, `0`/`$`, `/search`.
+
+One `duckdb` call per open reads the row count and schema from the file footer and only the first row group(s) for the rows, so the file's size barely matters. Nothing runs after that.
+
 ## Quarto: working directory
 
 `quarto render` runs a document's code from the document's own folder. Code you send from a `.qmd` does the same, so relative paths like `read.csv("data.csv")` work whichever directory Neovim was started from (yazi, a parent folder, …).
@@ -133,6 +155,7 @@ opts = {
   auto_open_plots = true,
   quarto = { cwd = "file" },     -- "file": .qmd code runs in its folder; "root"
   plot_scale = 1.0,              -- bigger plot text/lines
+  parquet = { rows = 200, max_width = 32 },
   r = { cmd = nil },             -- e.g. { "radian" }
   python = {
     cmd = nil,

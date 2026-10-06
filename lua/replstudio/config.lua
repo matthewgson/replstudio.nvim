@@ -39,6 +39,12 @@ M.defaults = {
     --- Passed to `uv venv --python` when creating the managed venv.
     version = nil,
   },
+  parquet = {
+    --- Rows read from the top of the file.
+    rows = 200,
+    --- Widest a column gets, in screen cells; longer values end in "…".
+    max_width = 32,
+  },
   debug = false,
 }
 

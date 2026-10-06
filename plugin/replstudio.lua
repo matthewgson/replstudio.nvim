@@ -18,6 +18,15 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
+-- Parquet is binary: show a read-only table instead of reading the bytes.
+vim.api.nvim_create_autocmd("BufReadCmd", {
+  group = group,
+  pattern = "*.parquet",
+  callback = function(ev)
+    require("replstudio.parquet").open(ev.buf)
+  end,
+})
+
 vim.api.nvim_create_autocmd("VimLeavePre", {
   group = group,
   callback = function()
