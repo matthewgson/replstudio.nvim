@@ -1,0 +1,23 @@
+---
+title: test
+---
+
+Some prose.
+
+```{r}
+x <- 1
+y <- function() {
+  2
+}
+```
+
+More prose.
+
+```{python}
+import math
+z = math.pi
+```
+
+```bash
+echo no
+```
