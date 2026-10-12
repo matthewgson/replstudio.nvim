@@ -35,28 +35,12 @@ def _read_size():
     return _size
 
 
-def apply_size():
-    """Default size of *new* figures follows the plot pane."""
-    size = _read_size()
-    if not size:
-        return
-    w, h, dpi = size
-    inches = (w / dpi, h / dpi)
-    mpl = sys.modules.get("matplotlib")
-    if mpl is not None:
-        mpl.rcParams["figure.figsize"] = inches
-        mpl.rcParams["savefig.dpi"] = dpi
-    pn = sys.modules.get("plotnine")
-    if pn is not None:
-        try:
-            pn.options.figure_size = inches
-            pn.options.dpi = dpi
-        except Exception:
-            pass
-
-
 def _write(fig, page, rev):
-    """Render at the pane's size; the figure's own size is restored after."""
+    """Render at the pane's size; the figure's own size is restored after.
+
+    Global rcParams are left alone, so what the user saves with savefig() or
+    ggsave() is the same as outside replstudio.
+    """
     name = "%04d_%03d" % (page, rev)
     tmp = os.path.join(DIR, ".%s.tmp" % name)
     size = _read_size()
@@ -158,6 +142,5 @@ def after_command(*_args, **_kwargs):
         return
     try:
         flush()
-        apply_size()
     except Exception as e:
         sys.stderr.write("replstudio: %s\n" % e)

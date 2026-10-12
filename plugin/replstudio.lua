@@ -45,7 +45,7 @@ vim.api.nvim_create_user_command("ReplStudio", function(cmd)
   require("replstudio").command(cmd.args)
 end, {
   nargs = "*",
-  desc = "replstudio: start | stop | restart | info | plots | layout [mode] | venv …",
+  desc = "replstudio: start | stop | restart | info | plots | layout [mode] | venv … | column [name]",
   complete = function(arglead, line)
     return require("replstudio").complete(arglead, line)
   end,

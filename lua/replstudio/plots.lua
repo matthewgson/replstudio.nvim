@@ -129,7 +129,16 @@ end
 function M.render()
   winbar()
   local p = list[idx]
-  if not p or not layout.plots_win() then
+  if not layout.plots_win() then
+    return
+  end
+  if not p then
+    -- History emptied: nothing left to show or open.
+    if placement then
+      placement:close()
+      placement = nil
+    end
+    set_lines({})
     return
   end
   if not snacks() then

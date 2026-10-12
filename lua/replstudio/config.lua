@@ -2,7 +2,12 @@
 
 local M = {}
 
-local data_home = vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")
+local is_win = vim.fn.has("win32") == 1
+local home = (vim.uv.os_homedir() or vim.env.HOME or ""):gsub("\\", "/")
+--- Where the managed venv lives: XDG data home, or %LOCALAPPDATA% on Windows.
+local data_home = vim.env.XDG_DATA_HOME
+  or (is_win and (vim.env.LOCALAPPDATA or (home .. "/AppData/Local")):gsub("\\", "/"))
+  or (home .. "/.local/share")
 
 ---@class replstudio.Config
 M.defaults = {
@@ -27,7 +32,8 @@ M.defaults = {
     cwd = "file",
   },
   r = {
-    --- Full command, e.g. { "radian" }. nil: radian if installed, else R.
+    --- Full command, e.g. { "radian" }. nil: radian if installed, else R,
+    --- found on PATH or where installers put it (Rterm.exe on Windows).
     cmd = nil,
   },
   python = {
@@ -40,8 +46,10 @@ M.defaults = {
     version = nil,
   },
   parquet = {
-    --- Rows read from the top of the file.
-    rows = 200,
+    --- Rows read per chunk; more load as you scroll, rows far away are
+    --- dropped. "auto": 20,000 cells ÷ columns shown (at most 60), i.e.
+    --- 100–5,000 rows, so a chunk lays out without a visible pause.
+    rows = "auto",
     --- Widest a column gets, in screen cells; longer values end in "…".
     max_width = 32,
   },

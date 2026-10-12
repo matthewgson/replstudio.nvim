@@ -75,6 +75,12 @@ local function dispatch(pick)
     parts = send.split("python", pick.text)
   end
   move_to(pick.next_row)
+  parts = vim.tbl_filter(function(part)
+    return part:find("%S") ~= nil
+  end, parts)
+  if #parts == 0 then
+    return true -- an empty cell or chunk: just move on
+  end
   with_session(pick.lang, function(s)
     for _, part in ipairs(parts) do
       require("replstudio.repl").send(s, send.normalize(part))
@@ -122,18 +128,19 @@ function M.source_file()
     return vim.notify("Source works in .R and .py files", vim.log.levels.WARN, { title = "replstudio" })
   end
   with_session(lang, function(s)
-    local path = api.nvim_buf_get_name(buf)
+    local slash = require("replstudio.detect").slash
+    local path = slash(api.nvim_buf_get_name(buf))
     if vim.bo[buf].modified or path == "" then
-      path = s.dir .. (lang == "r" and "/source.R" or "/source.py")
+      path = slash(s.dir) .. (lang == "r" and "/source.R" or "/source.py")
       vim.fn.writefile(api.nvim_buf_get_lines(buf, 0, -1, false), path)
     end
     local cmd
     if lang == "r" then
-      cmd = ("source(%q, echo = TRUE, max.deparse.length = Inf)"):format(path)
+      cmd = ('source(%q, echo = TRUE, max.deparse.length = Inf, encoding = "UTF-8")'):format(path)
     elseif s.spec.kind == "ipython" then
       cmd = ("%%run -i %q"):format(path)
     else
-      cmd = ("exec(compile(open(%q).read(), %q, 'exec'))"):format(path, path)
+      cmd = ("exec(compile(open(%q, encoding='utf-8').read(), %q, 'exec'))"):format(path, path)
     end
     require("replstudio.repl").send(s, cmd)
   end)
@@ -307,6 +314,12 @@ local subcommands = {
 
 ---@param line string
 function M.command(line)
+  -- Column names can hold any spaces: take the rest of the line as is
+  -- (completion escapes spaces as "\ ").
+  local name_arg = line:match("^%s*column%s+(.-)%s*$")
+  if name_arg or vim.trim(line) == "column" then
+    return require("replstudio.parquet").column(((name_arg or ""):gsub("\\ ", " ")))
+  end
   local args = vim.split(vim.trim(line), "%s+", { trimempty = true })
   local name = table.remove(args, 1) or "start"
   local fn = subcommands[name]
@@ -325,10 +338,15 @@ function M.complete(arglead, line)
   local items = {}
   if n <= 2 then
     items = vim.tbl_keys(subcommands)
+    items[#items + 1] = "column"
   elseif words[2] == "layout" and n == 3 then
     items = { "studio", "side", "focus" }
   elseif words[2] == "venv" and n == 3 then
     items = { "install", "add", "update", "rebuild" }
+  elseif words[2] == "column" and n >= 3 then
+    items = vim.tbl_map(function(name)
+      return (name:gsub(" ", "\\ "))
+    end, require("replstudio.parquet").column_names())
   end
   table.sort(items)
   return vim.tbl_filter(function(i)

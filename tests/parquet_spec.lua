@@ -17,6 +17,43 @@ eq(
 local sql = parquet._sql("/tmp/it's.parquet", 50)
 eq(sql:find("'/tmp/it''s.parquet'", 1, true) ~= nil, true, "single quote doubled")
 eq(sql:find("LIMIT 50", 1, true) ~= nil, true, "row limit")
+sql = parquet._sql("/tmp/x.parquet", "auto")
+eq(sql:find("LIMIT (SELECT greatest(100, least(5000, 20000 // least(greatest(count(*), 1), 60)))", 1, true) ~= nil, true, "auto limit sized in SQL")
+eq(sql:find("list(column_name)[1:40]", 1, true) ~= nil, true, "first two column chunks")
+eq(
+  parquet._tile_sql("/tmp/it's.parquet", { "a", "it's" }, 1000, 3000),
+  "SELECT translate(left(COLUMNS(['a', 'it''s'])::VARCHAR, 256), chr(30) || chr(31), '␞␟') FROM '/tmp/it''s.parquet' LIMIT 1000 OFFSET 3000;",
+  "tile: named columns, quotes doubled, cells cut"
+)
+eq(
+  parquet._tile_sql("/d/a[1]*?.parquet", { "x" }, 1, 0):find("'/d/a[[]1][*][?].parquet'", 1, true) ~= nil,
+  true,
+  "glob characters in a path are escaped"
+)
+eq(
+  parquet._tile_sql("/d/x.parquet", { "x" }, 1, 4, true),
+  "SELECT translate(COLUMNS(['x'])::VARCHAR, chr(30) || chr(31), '␞␟') FROM '/d/x.parquet' LIMIT 1 OFFSET 4;",
+  "full value for K"
+)
+
+-- ── finding columns ─────────────────────────────────────────────────────────
+local named = vim.tbl_map(function(n)
+  return { name = n }
+end, { "id", "Price", "price_usd", "unit price", "s15", "s150", "s1500" })
+eq(parquet._match_columns(named, "s15"), { 5 }, "exact name wins over names containing it")
+eq(parquet._match_columns(named, "PRICE"), { 2 }, "then the name in any case")
+eq(parquet._match_columns(named, "pric"), { 2, 3, 4 }, "then names containing it, in table order")
+eq(parquet._match_columns(named, "zzz"), {}, "no match")
+
+-- ── chunk size ──────────────────────────────────────────────────────────────
+eq(
+  { parquet._chunk(7), parquet._chunk(31), parquet._chunk(1), parquet._chunk(2000) },
+  { 2857, 645, 5000, 333 },
+  "auto: cells ÷ loaded columns (at most 60), clamped"
+)
+config.setup({ parquet = { rows = 300 } })
+eq(parquet._chunk(31), 300, "fixed rows per chunk")
+config.setup({})
 
 -- ── parsing duckdb -list output ─────────────────────────────────────────────
 local F, R, N = "\31", "\30", "\1"
@@ -71,4 +108,28 @@ view.rows = { { "1", "a\tb\nc" } }
 lines = parquet._layout(view)
 eq(lines[4], "      1 │ a→b↵c  ", "tab and newline shown as glyphs")
 
+config.setup({})
+
+-- Header names and types are cleaned like cells: a newline in a column name
+-- stays on one line, and a wide-character type keeps the columns aligned.
+config.setup({ parquet = { max_width = 32 } })
+view = {
+  cols = {
+    { name = "multi\nline", type = "integer", kind = "num" },
+    { name = "s", type = 'struct("가" integer)', kind = "nested" },
+  },
+  rows = { { "1", "{'가': 1}" } },
+}
+lines = parquet._layout(view)
+eq(vim.tbl_filter(function(l)
+  return l:find("\n")
+end, lines), {}, "no newline in any line")
+eq(vim.startswith(lines[1], " multi↵line "), true, "newline in a name shown as a glyph")
+eq(
+  vim.tbl_map(function(l)
+    return vim.fn.strdisplaywidth(l)
+  end, lines),
+  { 34, 34, 34, 34 },
+  "wide-character type: every line the same display width"
+)
 config.setup({})

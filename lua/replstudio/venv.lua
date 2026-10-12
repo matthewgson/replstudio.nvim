@@ -41,7 +41,14 @@ function M.path()
 end
 
 function M.exists()
-  return uv.fs_stat(M.path() .. "/bin/python") ~= nil
+  return require("replstudio.detect").env_python(M.path()) ~= nil
+end
+
+--- The venv's interpreter, where it is or will be.
+---@return string
+local function venv_python()
+  local detect = require("replstudio.detect")
+  return detect.env_python(M.path()) or (M.path() .. (detect.is_win and "/Scripts/python.exe" or "/bin/python"))
 end
 
 --- Run shell steps one after another; cb(ok).
@@ -72,7 +79,7 @@ end
 ---@param pkgs string[]
 ---@param upgrade? boolean
 local function install_step(pkgs, upgrade)
-  local py = M.path() .. "/bin/python"
+  local py = venv_python()
   local cmd
   if vim.fn.executable("uv") == 1 then
     cmd = { "uv", "pip", "install", "--python", py }
@@ -103,7 +110,12 @@ function M.create(cb, clear)
       create[#create + 1] = "--clear"
     end
   else
-    create = { "python3", "-m", "venv", path }
+    local base = require("replstudio.detect").find_python()
+    if not base then
+      notify("No Python found to create the venv. Install uv or Python 3, or set python.cmd.", vim.log.levels.ERROR)
+      return cb(false)
+    end
+    create = vim.list_extend(vim.deepcopy(base.cmd), { "-m", "venv", path })
     if clear then
       create[#create + 1] = "--clear"
     end
@@ -184,8 +196,9 @@ function M.hint_project(venv)
     return
   end
   hinted[venv] = true
+  local py = require("replstudio.detect").env_python(venv) or venv
   local tool = vim.fn.executable("uv") == 1 and ("uv pip install --python %s"):format(vim.fn.fnamemodify(venv, ":~"))
-    or (vim.fn.fnamemodify(venv, ":~") .. "/bin/pip install")
+    or (vim.fn.fnamemodify(py, ":~") .. " -m pip install")
   notify(("This project's venv has no matplotlib; plots won't show.\n%s ipython matplotlib plotnine"):format(tool), vim.log.levels.WARN)
 end
 

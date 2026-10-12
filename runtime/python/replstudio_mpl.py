@@ -8,9 +8,6 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 import replstudio_hook as _hook
 
-# Figures created in the very command that imports pyplot already fit the pane.
-_hook.apply_size()
-
 
 class FigureManager(FigureManagerBase):
     def show(self):  # fig.show()

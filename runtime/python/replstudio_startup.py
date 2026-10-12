@@ -24,7 +24,9 @@ def _replstudio_init():
     except NameError:
         ip = None
     if ip is not None:
-        ip.events.register("post_run_cell", replstudio_hook.after_command)
+        # post_execute runs before `%matplotlib inline` closes the figures
+        # (its own hook is registered later), so they still reach the pane.
+        ip.events.register("post_execute", replstudio_hook.after_command)
         # Registered by name: plotnine needn't be imported yet. Takes
         # precedence over plotnine's own _repr_mimebundle_.
         ip.display_formatter.ipython_display_formatter.for_type_by_name(
